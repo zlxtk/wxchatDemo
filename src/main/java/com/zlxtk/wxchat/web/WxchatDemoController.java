@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 import com.zlxtk.wxchat.service.impl.MyX509TrustManager;
@@ -253,11 +254,10 @@ public class WxchatDemoController {
 	 */
 	@RequestMapping(value = "/login")
 	public void login(HttpServletRequest request, HttpServletResponse response) throws Exception {
-		String callback_uri="http://mht.xiekuapp.com/web/login/callback";
-//		String url="https://open.weixin.qq.com/connect/qrconnect?appid="+authorizer_appid
-//				+ "&redirect_uri="+URLEncoder.encode(callback_uri, "UTF-8")
-//				+ "&response_type=code&scope=snsapi_login"
-//				+ "&state=12345#wechat_redirect";
+		
+		String tourl="http://www.baidu.com";
+		
+		String callback_uri="http://mht.xiekuapp.com/web/login/callback?tourl="+tourl;
 		String url="https://open.weixin.qq.com/connect/oauth2/authorize?appid="+authorizer_appid
 				+ "&redirect_uri="+URLEncoder.encode(callback_uri, "UTF-8")
 				+ "&response_type=code"
@@ -266,7 +266,7 @@ public class WxchatDemoController {
 				+ "&state=123123123"
 				+ "&component_appid="+component_appid
 				+ "#wechat_redirect";
-		logger.error("---------------用户登录网页授权路径--静默授权："+url);
+		logger.error("---------------用户登录网页授权路径："+url);
 		response.sendRedirect(url);
 	}
 	
@@ -278,26 +278,9 @@ public class WxchatDemoController {
 		logger.error("---------------用户登录网页授权回调begin:");
 		//获取code
 		String code=request.getParameter("code");
+		String tourl=request.getParameter("tourl");
 		logger.error("-----------------------用户登录网页授权回调code:"+code);
-		if(code==null){
-			String callback_uri="http://mht.xiekuapp.com/web/login/callback";
-			String url="https://open.weixin.qq.com/connect/oauth2/authorize?appid="+authorizer_appid
-					+ "&redirect_uri="+URLEncoder.encode(callback_uri, "UTF-8")
-					+ "&response_type=code"
-					+ "&scope=snsapi_userinfo"
-//					+ "&scope=snsapi_base"
-					+ "&state=123123123"
-					+ "&component_appid="+component_appid
-					+ "#wechat_redirect";
-			logger.error("---------------用户登录网页授权路径："+url);
-			response.sendRedirect(url);
-			return;
-		}
 		//获取access_token，openid
-//		String tokenUrl="https://api.weixin.qq.com/sns/oauth2/access_token?appid="+authorizer_appid
-//				+ "&secret="+component_appsecret
-//				+ "&code="+code
-//				+ "&grant_type=authorization_code";
 		String tokenUrl="https://api.weixin.qq.com/sns/oauth2/component/access_token?appid="+authorizer_appid
 				+ "&code="+code
 				+ "&grant_type=authorization_code"
@@ -308,6 +291,7 @@ public class WxchatDemoController {
 		user_access_token=re.getString("access_token");
 		String refresh_token=re.getString("refresh_token");
 		openid=re.getString("openid");
+		response.sendRedirect(tourl);
 		
 		logger.error("---------------用户登录网页授权回调end:");
 	}
@@ -342,6 +326,59 @@ public class WxchatDemoController {
 		logger.error("---------------调用网页授权获取用户信息接口end:");
 	}
 	
+	/**
+	 * 用户对公众号交互的事件推送，比如关注和取消关注事件
+	 * @Title: eventPush 
+	 * @Description: TODO
+	 * @param request
+	 * @param response
+	 * @throws Exception
+	 * @return: void
+	 */
+	@RequestMapping("/{appid}/eventPush")
+	public void eventPush(@PathVariable String appid,HttpServletRequest request, HttpServletResponse response) throws Exception {
+		logger.error("----------------------event收到微信推送的事件信息 begin:");
+		logger.error("----------------------------appid: "+appid);
+
+		String nonce = request.getParameter("nonce");
+		logger.error("-----------------------nonce：" + nonce);
+		String timestamp = request.getParameter("timestamp");
+		logger.error("-----------------------timestamp：" + timestamp);
+		String signature = request.getParameter("signature");
+		logger.error("-----------------------signature：" + signature);
+		String encrypt_type = request.getParameter("encrypt_type");
+		logger.error("-----------------------encrypt_type：" + encrypt_type);
+		String msgSignature = request.getParameter("msg_signature");
+		logger.error("-----------------------msg_signature：" + msgSignature);
+
+		// 1,保存component_verify_ticket
+		StringBuilder sb = new StringBuilder();
+		BufferedReader in = request.getReader();
+		String line;
+		while ((line = in.readLine()) != null) {
+			sb.append(line);
+		}
+		String xml = sb.toString();
+		logger.error("---------------接受到的原始数据：" + xml);
+		if (encrypt_type.equals("aes")) {
+			Document doc = DocumentHelper.parseText(xml);
+			Element root = doc.getRootElement();
+			String encrypt = root.elementText("Encrypt");
+			String fromXML = String.format(xmlFormat, encrypt);
+			WXBizMsgCrypt pc = new WXBizMsgCrypt(component_token, EncodingAESKey, component_appid);
+			xml = pc.decryptMsg(msgSignature, timestamp, nonce, fromXML);
+			logger.error("-----------------------解密后的原始数据：" + xml);
+		}
+		// json解析
+		Document doc = DocumentHelper.parseText(xml);
+		Element rootElt = doc.getRootElement();
+		String Event=rootElt.elementText("Event");
+		logger.error("-----------------------Event :" + Event);
+		
+		
+		
+		logger.error("-----------------------event收到微信推送的事件信息end :");
+	}
 	
 
 	/**
